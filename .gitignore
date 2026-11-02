@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+_refs/
+tools/membw
+tools/cf8peek
+tools/ecamdump/*.o
+tools/ecamdump/*.ko
+tools/ecamdump/*.mod
+tools/ecamdump/*.mod.c
+tools/ecamdump/.*.cmd
+tools/ecamdump/Module.symvers
+tools/ecamdump/modules.order
