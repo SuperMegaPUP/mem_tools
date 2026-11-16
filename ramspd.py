@@ -29,7 +29,7 @@ from rspd.transport import SmbusError  # noqa: E402
 
 
 def collect_live():
-    from rspd import dimmtemp, dmi, ecc, epmc, memclock
+    from rspd import dimmtemp, dmi, ecc, epmc, memclock, sensors
     info = dmi.parse_dmi()
     try:
         info["live_clock_mts"] = memclock.measure_memclock()
@@ -47,6 +47,10 @@ def collect_live():
         info["dimm_temp"] = dimmtemp.collect()
     except OSError:
         info["dimm_temp"] = None
+    try:
+        info["sensors"] = sensors.collect()
+    except OSError:
+        info["sensors"] = None
     for dev in info["devices"]:
         db = dmi.lookup_part(dev.get("part_number"))
         if db:

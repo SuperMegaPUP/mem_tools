@@ -70,6 +70,16 @@ dimmtemp._HWMON_GLOB = os.path.join(tmp2, "*")
 check("все мёртвые", [t["connected"] for t in dimmtemp.read_dimm_temps()],
       [False])
 
+# k10temp (AMD EPYC/Ryzen): Tctl/Tdie → температура CPU, максимум по кристаллам
+_saved = dimmtemp._hwmon_sensors
+dimmtemp._hwmon_sensors = lambda: [
+    {"hwmon": "hwmon9", "chip": "k10temp", "label": "Tctl", "c": 41.0},
+    {"hwmon": "hwmon9", "chip": "k10temp", "label": "Tdie", "c": 39.0},
+    {"hwmon": "hwmon10", "chip": "k10temp", "label": "Tctl", "c": 44.0},
+]
+check("k10temp Tctl (макс по кристаллам)", dimmtemp.cpu_package_c(), 44.0)
+dimmtemp._hwmon_sensors = _saved
+
 # --- EP MC Thermal Control: фиктивное sysfs config-пространство ---
 from rspd import epmc  # noqa: E402
 

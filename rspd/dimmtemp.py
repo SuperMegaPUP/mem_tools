@@ -89,7 +89,7 @@ def _ipmi_dimm_temps() -> list[dict]:
             continue
         m = re.search(r"(\d+(?:\.\d+)?)\s*degrees\s*C", line, re.I)
         if m:
-            name = line.split("|")[0].strip()
+            name = line.split("|")[0].strip().removesuffix("_TEMP")
             out.append({"label": name, "c": float(m.group(1)),
                         "chip": "ipmi", "connected": True})
     return out
@@ -97,10 +97,15 @@ def _ipmi_dimm_temps() -> list[dict]:
 
 def cpu_package_c() -> float | None:
     """Температура пакета CPU (внутри — контроллер памяти): coretemp
-    'Package id', иначе thermal_zone x86_pkg_temp, иначе PECI Agent."""
+    'Package id', AMD k10temp 'Tctl'/'Tdie' (максимум по кристаллам),
+    иначе thermal_zone x86_pkg_temp, иначе PECI Agent."""
     for s in _hwmon_sensors():
         if s["chip"] == "coretemp" and "package" in s["label"].lower():
             return s["c"]
+    tctl = [s["c"] for s in _hwmon_sensors()
+            if s["chip"] == "k10temp" and s["label"].lower() in ("tctl", "tdie")]
+    if tctl:
+        return max(tctl)
     for z in glob.glob("/sys/class/thermal/thermal_zone*"):
         if "pkg" in _read(os.path.join(z, "type")).lower():
             t = _read(os.path.join(z, "temp"))

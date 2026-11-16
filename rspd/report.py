@@ -214,14 +214,16 @@ def render_live(info, as_json=False):
         tl = []
         for t in sorted(valid, key=lambda t: t["label"]):
             n = max(1, min(12, round((t["c"] - 25) / 65 * 12)))
-            tl.append(f"{t['label']:<9} {t['c']:>3.0f} °C  "
+            tl.append(f"{t['label'][:9]:<9} {t['c']:>3.0f} °C  "
                       + "█" * n + "░" * (12 - n))
         cs = [t["c"] for t in valid]
         hi = max(valid, key=lambda t: t["c"])
         tl.append("─" * 30)
         tl.append(f"сред {sum(cs) / len(cs):.0f}° · макс {hi['c']:.0f}° "
-                  f"{hi['label']}")
+                  f"{hi['label'][:9]}")
         tl.append("предел 85 °C")
+        if dt.get("cpu_package_c"):
+            tl.append(f"CPU-пакет   {dt['cpu_package_c']:>3.0f} °C")
     bl = None
     if bw_k:
         theo = bw.get("theoretical_gbs")
@@ -260,6 +262,44 @@ def render_live(info, as_json=False):
         else:
             for ln in _frame("ПРОПУСКНАЯ СПОСОБНОСТЬ", bl, 34):
                 print(ln)
+
+    # ─── сенсоры BMC / GPU ───
+    sen = info.get("sensors")
+    if sen:
+        _rule("СЕНСОРЫ")
+        unit = {"temp": "°", "fan": " об/мин", "volt": " В", "amp": " А"}
+        for grp, lbl in (("temp", "Температуры:"), ("fan", "Веера:"),
+                         ("volt", "Напряжения:"), ("amp", "Токи:")):
+            items = [s for s in sen["sensors"] if s["group"] == grp]
+            if not items:
+                continue
+            texts = [f"{s['name']} {s['v']:g}{unit[grp]}"
+                     + ("⚠" if s["status"] not in ("ok", "ns") else "")
+                     for s in items]
+            lines, cur = [], ""
+            for t in texts:
+                add = t if not cur else " · " + t
+                if cur and len(cur) + len(add) > 66:
+                    lines.append(cur)
+                    cur = t
+                else:
+                    cur += add
+            if cur:
+                lines.append(cur)
+            for i, l in enumerate(lines):
+                if i == 0:
+                    _line(lbl, l)
+                else:
+                    print(" " * 28 + l)
+        for p in sen.get("power", []):
+            _line(f"Мощность {p['name']}:",
+                  f"{p['w']:.1f} Вт ({p['v']:g} В × {p['a']:g} А)")
+        tot = sum(p["w"] for p in sen.get("power", []))
+        if len(sen.get("power", [])) > 1:
+            _line("Итого по этим VR:", f"{tot:.1f} Вт")
+        for g in sen.get("gpus", []):
+            _line("GPU:", f"{g['name']}: {g['c']:.0f}°C, "
+                          f"{g['w']:.1f} Вт из {g['cap']:.0f}")
 
     # ─── ECC и надёжность ───
     e = info.get("ecc")
@@ -319,9 +359,21 @@ def render_live(info, as_json=False):
                 f"{(x.get('part_number') or '-'):<22} {x.get('serial') or '-'}"
             print(row)
 
-    print("\n  Источники: SMBIOS/DMI · регистры DRAMC и Thermal Control "
-          "(PCI 0xff,")
-    print("  только чтение) · EDAC sysfs · journalctl · perf uncore IMC. "
-          "SPD EEPROM")
-    print("  ОС недоступны (SMLink/ME) — как всё это читается: "
-          "docs/AGENT-HOWTO-READ-TIMINGS.md")
+    src = ["SMBIOS/DMI"]
+    if info.get("dramc"):
+        src.append("регистры DRAMC и Thermal Control (PCI 0xff, только чтение)")
+    if info.get("live_clock_mts"):
+        src.append("perf uncore IMC")
+    if info.get("ecc"):
+        src.append("EDAC sysfs · journalctl")
+    if info.get("sensors"):
+        src.append("BMC SDR (ipmitool) · nvidia-smi (только чтение)")
+    src.append("SPD EEPROM ОС недоступны (SMLink/ME) — как всё это "
+               "читается: docs/AGENT-HOWTO-READ-TIMINGS.md")
+    cur = "  Источники:"
+    for word in " ".join(src).split():
+        if len(cur) + len(word) + 1 > 74:
+            print(cur)
+            cur = " " * 11
+        cur += " " + word
+    print(cur)

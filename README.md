@@ -78,7 +78,14 @@ SPD EEPROM физически подключены к SMLink/ME, а не к об
   стресс membw 75°C → обратимость при остывании;
 - не подтверждено регистрами: CR (для 4R RDIMM @1866 = 2N по JEDEC),
   tXS/tXSR, Vref/ODT. Полная карта регистров и методика реверса —
-  [docs/AGENT-HOWTO-READ-TIMINGS.md](docs/AGENT-HOWTO-READ-TIMINGS.md).
+  [docs/AGENT-HOWTO-READ-TIMINGS.md](docs/AGENT-HOWTO-READ-TIMINGS.md);
+- **сенсоры сервера** (если есть BMC) — блок «СЕНСОРЫ»: все числовые
+  датчики `ipmitool sdr elist` по группам (температуры, веера, напряжения,
+  токи), мощность выводится из пар VOUT×IOUT (реальное энергопотребление
+  памяти!), плюс GPU через nvidia-smi. Проверено на Gigabyte MZ32
+  (EPYC 7551): 38 живых сенсоров, ~39 Вт на 12 RDIMM. На AMD тайминги
+  UMC недоступны ОС (принадлежат SMU) — скорость/ECC/температуры/питание
+  при этом полностью.
 
 Для глубокого анализа в `tools/ecamdump/` лежит модуль ядра, выгружающий
 полные 4 КБ ECAM всех устройств шины 0xff (пригодся при реверсе; обычная
@@ -173,11 +180,12 @@ rspd/memclock.py     измерение частоты памяти счётчи
 rspd/epmc.py         живые тайминги из регистров DRAMC (шина PCI 0xff)
 rspd/ecc.py          ECC-статистика: счётчики EDAC + журнал за сутки
 rspd/dimmtemp.py     температура модулей: TSOD / PECI DTS / IPMI / SuperIO
+rspd/sensors.py      сенсоры BMC (SDR: темп/веера/вольты/токи, V×I) + GPU
 rspd/membw.py        пропускная способность DRAM (обёртка над membw.c)
 rspd/report.py       текстовый/JSON вывод
 tools/membw.c        STREAM-подобный бенчмарк (Read/Write/Copy/Scale/Add/Triad)
 setup_permissions.sh однократная настройка прав (root)
-tests/               тесты (оракул decode-dimms + синтетика + ECC + dimmtemp)
+tests/               тесты (оракул decode-dimms + синтетика + ECC + dimmtemp + sensors)
 _refs/               референсные материалы (дампы, эталонные декодеры)
 ```
 
