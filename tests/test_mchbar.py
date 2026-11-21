@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Декодер MCHBAR (LGA1700): разбор дампа и валидация таймингов.
 
-Якоря — из BIOS-diff на Gigabyte B760M: tCL=17, tRAS=40, tRCD=tRP=20,
-tRFC1=632 tCK при 3600 MT/s.
+Якоря — два BIOS-diff раунда на Gigabyte B760M (G.Skill DDR4-4266):
+раунд 1: 17-20-20-40, tFAW 16, tRFC(поле BIOS 504) @3600;
+раунд 2: 16-18-22-38, tFAW 18, tRFC(поле BIOS 512), tREFI 65534 @3200.
+Фикстура — второй раунд (все значения разные).
 """
 import os
 import sys
@@ -21,32 +23,38 @@ def check(name, got, want):
         FAILS.append(name)
 
 
-DUMP = """00318: 14140000
-234c8: 0e400010
-239f4: 89832811
-2d07c: 000001f7
-28e74: 89832811
+DUMP = """2e070: 0e100020
+2e53c: 12131211
+2e000: 16418016
+2e004: 0090982a
+2e008: 18049412
+2e43c: 0800fffe
+2e0a8: 03240040
 мусорная строка
-00319: не-шестнадцатеричное
+2e001: не-шестнадцатеричное
 """
 
 vals = mchbar.parse_dump(DUMP)
-check("parse_dump, мусорные строки отброшены", len(vals), 5)
-check("parse_dump, значение 0x239f4", vals[0x239F4], 0x89832811)
+check("parse_dump, мусорные строки отброшены", len(vals), 7)
+check("parse_dump, значение 0x2e004", vals[0x2E004], 0x0090982A)
 
 d = mchbar.decode(vals)
-check("tCL (якорь BIOS 17)", d["tCL"], 17)
-check("tRAS (якорь BIOS 40)", d["tRAS"], 40)
-check("tRCD/tRP (якорь BIOS 20/20)", (d["tRCD"], d["tRP"]), (20, 20))
-check("tFAW (якорь BIOS 16)", d["tFAW"], 16)
-check("tRFC1 (якорь BIOS 504→регистр 503)", d["tRFC"], 503)
+check("tCL (якорь 16)", d["tCL"], 16)
+check("tRCD (якорь 18)", d["tRCD"], 18)
+check("tRP (якорь 22)", d["tRP"], 22)
+check("tRAS (якорь 38, 6-бит)", d["tRAS"], 38)
+check("tFAW (якорь 18)", d["tFAW"], 18)
+check("tRFC1 (804 tCK @3200 = поле BIOS 512 нс)", d["tRFC"], 804)
+check("tREFI (якорь 65534)", d["tREFI"], 65534)
 
-# негативные проверки: пустое окно / FF / невозможные тайминги
+# негативные проверки
 check("пустой дамп → None", mchbar.decode({}), None)
 check("FF-окно → None", mchbar.decode(
-    {0x318: 0xFFFFFFFF, 0x239F4: 0xFFFFFFFF}), None)
+    {0x2E070: 0xFFFFFFFF, 0x2E53C: 0xFFFFFFFF,
+     0x2E000: 0xFFFFFFFF, 0x2E004: 0xFFFFFFFF}), None)
 check("tRAS < tCL → None", mchbar.decode(
-    {0x318: 0x14140000, 0x239F4: 0x89831019}), None)  # tCL=25, tRAS=16
+    {0x2E070: 0x0E1E0020, 0x2E53C: 0x12131211,   # tCL=30
+     0x2E000: 0x16418016, 0x2E004: 0x0090502A}), None)  # tRAS=20
 _proc_orig = mchbar.PROC
 mchbar.PROC = "/nonexistent-mchbar"
 check("read() без /proc → None", mchbar.read(), None)

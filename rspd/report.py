@@ -200,8 +200,11 @@ def render_live(info, as_json=False):
                 if d.get(key):
                     sub.append(f"{lbl} {d[key]}")
             if d.get("tREFI"):
+                # 16-битные sentinel (Auto=65535) и прочий мусор в нс не
+                # переводим: JEDEC tREFI ≤ 7.8 мкс
+                us = d["tREFI"] * tck / 1000 if tck else 0
                 sub.append(f"tREFI {d['tREFI']}"
-                           + (f" (~{d['tREFI'] * tck / 1000:.2f} мкс)" if tck else ""))
+                           + (f" (~{us:.2f} мкс)" if 0 < us < 10 else ""))
             if sub:
                 _line("Подтайминги:", " · ".join(sub))
             _line("Источник:", f"регистры DRAMC {d['source']} (только чтение)")
