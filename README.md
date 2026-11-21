@@ -86,6 +86,12 @@ SPD EEPROM физически подключены к SMLink/ME, а не к об
   (EPYC 7551): 38 живых сенсоров, ~39 Вт на 12 RDIMM. На AMD тайминги
   UMC недоступны ОС (принадлежат SMU) — скорость/ECC/температуры/питание
   при этом полностью.
+- **AMD GPU** — amdgpu hwmon даёт edge/junction/mem: реальные hotspot и
+  температуру видеопамяти (NVML на Turing/CMP 50HX такого не даёт).
+- **потребительский Intel LGA1700** (B760 и т.п.) — тайминги из окна
+  DRAMC (MCHBAR) через read-only модуль `tools/mchbar` (IO_STRICT_DEVMEM
+  режет /dev/mem). Карта регистров получена BIOS-diff-ом; проверено на
+  Gigabyte B760M: tCL/tRAS/tRCD/tRP/tRFC1 читаются живьём.
 
 Для глубокого анализа в `tools/ecamdump/` лежит модуль ядра, выгружающий
 полные 4 КБ ECAM всех устройств шины 0xff (пригодся при реверсе; обычная
@@ -180,12 +186,13 @@ rspd/memclock.py     измерение частоты памяти счётчи
 rspd/epmc.py         живые тайминги из регистров DRAMC (шина PCI 0xff)
 rspd/ecc.py          ECC-статистика: счётчики EDAC + журнал за сутки
 rspd/dimmtemp.py     температура модулей: TSOD / PECI DTS / IPMI / SuperIO
-rspd/sensors.py      сенсоры BMC (SDR: темп/веера/вольты/токи, V×I) + GPU
+rspd/sensors.py      сенсоры BMC (SDR: темп/веера/вольты/токи, V×I) + GPU (nvidia-smi и amdgpu hwmon: hotspot/VRAM)
+rspd/mchbar.py       живые тайминги потребительского Intel LGA1700 (дамп /proc/mchbar от tools/mchbar)
 rspd/membw.py        пропускная способность DRAM (обёртка над membw.c)
 rspd/report.py       текстовый/JSON вывод
 tools/membw.c        STREAM-подобный бенчмарк (Read/Write/Copy/Scale/Add/Triad)
 setup_permissions.sh однократная настройка прав (root)
-tests/               тесты (оракул decode-dimms + синтетика + ECC + dimmtemp + sensors)
+tests/               тесты (оракул decode-dimms + синтетика + ECC + dimmtemp + sensors + mchbar)
 _refs/               референсные материалы (дампы, эталонные декодеры)
 ```
 

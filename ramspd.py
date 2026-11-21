@@ -29,7 +29,7 @@ from rspd.transport import SmbusError  # noqa: E402
 
 
 def collect_live():
-    from rspd import dimmtemp, dmi, ecc, epmc, memclock, sensors
+    from rspd import dimmtemp, dmi, ecc, epmc, mchbar, memclock, sensors
     info = dmi.parse_dmi()
     try:
         info["live_clock_mts"] = memclock.measure_memclock()
@@ -39,6 +39,18 @@ def collect_live():
         info["dramc"] = epmc.read_dramc()
     except OSError:
         info["dramc"] = None
+    if not info["dramc"]:
+        # потребительский Intel: ECAM-0xff нет, зато есть окно DRAMC
+        info["dramc"] = mchbar.read()
+        d = info["dramc"]
+        if d:
+            spd = next((dv.get("configured_speed_mts")
+                        for dv in info["devices"]
+                        if dv.get("configured_speed_mts")), None)
+            if spd:
+                d.setdefault("mtps", spd)
+                d.setdefault("ratio", int(round(spd / 100)))
+                d.setdefault("bclk_mhz", 100.0)
     try:
         info["ecc"] = ecc.collect()
     except OSError:

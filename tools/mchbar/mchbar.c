@@ -17,7 +17,7 @@
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
 
-#define WIN 0x8000 /* MCHBAR: окно 32 КБ */
+#define WIN 0x40000  /* реальное пространство DRAMC на LGA1700 — 256 КБ */
 #define NDWORD (WIN / 4)
 
 static u64 base_override;

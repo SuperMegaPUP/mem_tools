@@ -187,9 +187,12 @@ def render_live(info, as_json=False):
             _line("Множитель:", f"{d['ratio']} × BCLK {d['bclk_mhz']} МГц")
             _line("Тайминги:", f"{d['tCL']}-{d['tRCD']}-{d['tRP']}-{d['tRAS']} "
                                f"(CL-tRCD-tRP-tRAS)")
-            _line("", f"tRC {d.get('tRC', '?')} · tRFC {d.get('tRFC', '?')}"
-                  + (f" ({d['tRFC'] * tck:.0f} нс)"
-                     if d.get("tRFC") and tck else ""))
+            rc_part = (f"tRC {d['tRC']} · " if d.get("tRC") else "")
+            if d.get("tRFC"):
+                rc_part += (f"tRFC {d['tRFC']}"
+                            + (f" ({d['tRFC'] * tck:.0f} нс)" if tck else ""))
+            if rc_part:
+                _line("", rc_part)
             sub = []
             for key, lbl in (("tWR", "tWR"), ("tFAW", "tFAW"), ("tCWL", "tCWL"),
                              ("tRRD_tWTR_tRTP", "tRRD/tWTR/tRTP"),
@@ -367,7 +370,7 @@ def render_live(info, as_json=False):
 
     src = ["SMBIOS/DMI"]
     if info.get("dramc"):
-        src.append("регистры DRAMC и Thermal Control (PCI 0xff, только чтение)")
+        src.append("регистры DRAMC (только чтение)")
     if info.get("live_clock_mts"):
         src.append("perf uncore IMC")
     if info.get("ecc"):
