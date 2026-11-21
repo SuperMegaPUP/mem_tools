@@ -8,9 +8,12 @@ VR_*_VOUT / VR_*_IOUT — так видно реальное энергопот�
 """
 from __future__ import annotations
 
+import glob
 import os
 import re
 import subprocess
+
+_HWMON_GLOB = "/sys/class/hwmon/hwmon*"
 
 # единица SDR -> группа (с равной по смыслу подписью в отчёте)
 _UNIT2GROUP = {"degrees c": "temp", "rpm": "fan", "volt": "volt",
@@ -85,10 +88,61 @@ def read_gpus() -> list[dict]:
     return gpus
 
 
+def read_amd_gpus() -> list[dict]:
+    """AMD GPU через amdgpu hwmon: edge (край кристалла), junction
+    (горячая точка ≈ hotspot NVIDIA) и mem (температура видеопамяти —
+    на GDDR6 её даёт только amdgpu, NVML её не показывает)."""
+    gpus = []
+    for h in sorted(glob.glob(_HWMON_GLOB)):
+        with open(os.path.join(h, "name")) as f:
+            if f.read().strip() != "amdgpu":
+                continue
+        card = {"name": "amdgpu"}
+        for inp in sorted(glob.glob(os.path.join(h, "temp*_input"))):
+            base = inp[: -len("_input")]
+            try:
+                with open(inp) as f:
+                    c = round(int(f.read().strip()) / 1000.0, 1)
+            except (OSError, ValueError):
+                continue
+            lbl = "gpu"
+            try:
+                with open(base + "_label") as f:
+                    lbl = f.read().strip().lower()
+            except OSError:
+                pass
+            card[{"edge": "c", "junction": "junction",
+                  "mem": "mem"}.get(lbl, "extra_" + lbl)] = c
+        try:  # мощность и лимит: µW у amdgpu, файл в hwmon или device/
+            for key, fname in (("w", "power1_average"),
+                               ("cap", "power1_cap")):
+                for p in (os.path.join(h, fname),
+                          os.path.join(h, "device", fname)):
+                    if os.path.exists(p):
+                        with open(p) as f:
+                            card[key] = float(f.read().strip()) / 1e6
+                        break
+        except (OSError, ValueError):
+            pass
+        # имя: PCI-слот из uevent (0000:03:00.0 → "AMD GPU 03:00.0")
+        slot = ""
+        try:
+            with open(os.path.join(h, "device", "uevent")) as f:
+                for line in f:
+                    if line.startswith("PCI_SLOT_NAME="):
+                        slot = line.split("=", 1)[1].strip().split(":", 1)[1]
+        except OSError:
+            pass
+        card["name"] = f"AMD GPU {slot}" if slot else "amdgpu"
+        if "c" in card:
+            gpus.append(card)
+    return gpus
+
+
 def collect() -> dict | None:
     """Всё вместе; None — если сенсоров нет вовсе (десктоп без BMC)."""
     sensors = parse_elist(_run(["ipmitool", "sdr", "elist"])) if _bmc_present() else []
-    gpus = read_gpus()
+    gpus = read_gpus() + read_amd_gpus()
     if not sensors and not gpus:
         return None
     return {"sensors": sensors, "power": derive_power(sensors), "gpus": gpus}

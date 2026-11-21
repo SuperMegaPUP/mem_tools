@@ -37,7 +37,9 @@ def parse_dmi(types="16,17"):
                 "max_size_mb": _field(block, "Maximum Capacity"),
             })
         elif t == 17:
-            size = _field(block, "Size")
+            # dmidecode на части дистрибутивов печатает бинарные единицы
+            # (GiB/MiB) — нормализуем к GB/MB (числа в DMI и так бинарные)
+            size = (_field(block, "Size") or "").replace("iB", "B")
             if not size or size.startswith("No Module"):
                 continue
             def num(s):

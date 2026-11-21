@@ -60,5 +60,30 @@ check("GPU csv, N/A пропущен", [(x["name"], x["c"], x["w"]) for x in g],
       [("NVIDIA CMP 50HX", 25.0, 0.87), ("NVIDIA CMP 50HX", 27.0, 8.42)])
 sensors._run = _run_orig
 
+# amdgpu hwmon: фиктивное дерево с edge/junction/mem
+import tempfile  # noqa: E402
+tmp = tempfile.mkdtemp()
+hw = os.path.join(tmp, "hwmon0")
+os.makedirs(hw)
+with open(os.path.join(hw, "name"), "w") as f:
+    f.write("amdgpu\n")
+for i, (lbl, v) in enumerate([("edge", 38000), ("junction", 39000),
+                              ("mem", 40000)], 1):
+    with open(os.path.join(hw, f"temp{i}_input"), "w") as f:
+        f.write(str(v))
+    with open(os.path.join(hw, f"temp{i}_label"), "w") as f:
+        f.write(lbl)
+for fn, v in (("power1_average", "23000000"), ("power1_cap", "132000000")):
+    with open(os.path.join(hw, fn), "w") as f:
+        f.write(v)
+_glob_orig = sensors._HWMON_GLOB
+sensors._HWMON_GLOB = os.path.join(tmp, "hwmon*")
+g = sensors.read_amd_gpus()
+check("amdgpu edge/junction/mem",
+      [(x.get("c"), x.get("junction"), x.get("mem")) for x in g],
+      [(38.0, 39.0, 40.0)])
+check("amdgpu мощность µW→Вт", [(g[0]["w"], g[0]["cap"])], [(23.0, 132.0)])
+sensors._HWMON_GLOB = _glob_orig
+
 print(f"\n{'ВСЕ ТЕСТЫ СЕНСОРОВ ПРОЙДЕНЫ' if not FAILS else 'ПРОВАЛЕНО: ' + ', '.join(FAILS)}")
 sys.exit(1 if FAILS else 0)

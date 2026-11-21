@@ -298,8 +298,14 @@ def render_live(info, as_json=False):
         if len(sen.get("power", [])) > 1:
             _line("Итого по этим VR:", f"{tot:.1f} Вт")
         for g in sen.get("gpus", []):
-            _line("GPU:", f"{g['name']}: {g['c']:.0f}°C, "
-                          f"{g['w']:.1f} Вт из {g['cap']:.0f}")
+            extra = ""
+            if g.get("junction") is not None:
+                extra += f", хотспот {g['junction']:.0f}°"
+            if g.get("mem") is not None:
+                extra += f", VRAM {g['mem']:.0f}°"
+            pw = (f", {g['w']:.1f} Вт из {g['cap']:.0f}"
+                  if "w" in g and "cap" in g else "")
+            _line("GPU:", f"{g['name']}: {g['c']:.0f}°C{extra}{pw}")
 
     # ─── ECC и надёжность ───
     e = info.get("ecc")
