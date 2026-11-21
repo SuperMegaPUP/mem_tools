@@ -22,22 +22,24 @@ def check(name, got, want):
 
 
 DUMP = """00318: 14140000
-234c0: 00090278
+234c8: 0e400010
 239f4: 89832811
+2d07c: 000001f7
 28e74: 89832811
 мусорная строка
 00319: не-шестнадцатеричное
 """
 
 vals = mchbar.parse_dump(DUMP)
-check("parse_dump, мусорные строки отброшены", len(vals), 4)
+check("parse_dump, мусорные строки отброшены", len(vals), 5)
 check("parse_dump, значение 0x239f4", vals[0x239F4], 0x89832811)
 
 d = mchbar.decode(vals)
 check("tCL (якорь BIOS 17)", d["tCL"], 17)
 check("tRAS (якорь BIOS 40)", d["tRAS"], 40)
 check("tRCD/tRP (якорь BIOS 20/20)", (d["tRCD"], d["tRP"]), (20, 20))
-check("tRFC1 (632 tCK ≈ 351 нс)", d["tRFC"], 632)
+check("tFAW (якорь BIOS 16)", d["tFAW"], 16)
+check("tRFC1 (якорь BIOS 504→регистр 503)", d["tRFC"], 503)
 
 # негативные проверки: пустое окно / FF / невозможные тайминги
 check("пустой дамп → None", mchbar.decode({}), None)
