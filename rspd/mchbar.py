@@ -6,23 +6,27 @@
 пространно 256 КБ. /dev/mem закрыт IO_STRICT_DEVMEM, поэтому снимок
 снимается read-only модулем tools/mchbar и читается из /proc/mchbar.
 
-Карта привязана ДВУМЯ BIOS-diff раундами (Gigabyte B760M: 17-20-20-40
-tFAW16 tRFC(504ns) @3600 → 16-18-22-38 tFAW18 tRFC(512ns) @3200; см.
-docs §6.6). Настоящий блок таймингов — 0x2e000 (канал A) и зеркала
-0x2f000 / 0x3e000 / 0x3f000 (шаг +0x10000):
+Карта привязана ТРЕМЯ BIOS-diff раундами с перекрёстной фильтрацией
+(Gigabyte B760M: R1 17-20-20-40 tFAW16 tRFC504 @3600; R2 16-18-22-38
+tFAW18 tRFC512 @3200; R3 то же + tRFC704 @3200; см. docs §6.6).
+Блок таймингов — 0x2e000 (зеркала 0x2f000/0x3e000/0x3f000, шаг
++0x10000):
   0x2e070 [23:16]  — tCL;
-  0x2e53c [15:8]   — tRCD;
+  0x2e004 [15:10]  — tRAS (6-бит);
+  0x2e004 [24:19]  — tRCD (6-бит, тот же регистр!);
   0x2e000 [7:0]    — tRP;
-  0x2e004 [16:10]  — tRAS (6-битное поле);
   0x2e008 [7:0]    — tFAW;
-  0x2e43c [15:0]   — tREFI (raw, BIOS 65535 → регистр 65535);
-  0x2e0a8 [31:16]  — tRFC1 в тактах памяти; поле tRFC в BIOS Gigabyte
-                     задаётся в НАНСЕКУНДАХ (504→900 @3600, 512→804
-                     @3200 — округления и дерейт рангов).
-Ловушки (обженились дважды): блок 0x23xxx/0x20xxx — тренировочный,
-перезаписывается каждую загрузку, значения там совпадают с таймингами
-случайно (0x239f4=17/40, 0x2d07c=503 — совпадения раунда 1); поле
-0x318 не двигалось вообще — тоже константа.
+  0x2e43c [15:0]   — tREFI (raw; 65535 = auto-sentinel, в нс не
+                     переводить);
+  0x2e43c [31:16]  — поле tRFC из BIOS × 4 (2016/2048/2816 =
+                     504/512/704 ×4 — поле в ТАКТАХ, не в нс!);
+  0x2e4c0 [15:0]   — tRFC1 = поле + 10 нс (дерейт рангов).
+Ловушки (обжигались трижды): блок 0x20-0x23xxx — тренировочный,
+перезаписывается каждую загрузку, совпадения с таймингами случайны
+(R1: 0x239f4=17/40, 0x2d07c=503); 0x2e53c[15:8] два раунда выглядел
+как tRCD, а на третьем уехал на +1 (вокруг tRCD тренировочные поля
+±1); 0x2e0a8[31:16] — авто-таймер ~500 нс, на поле tRFC не реагирует;
+поле 0x318 не двигалось вообще.
 """
 from __future__ import annotations
 
@@ -31,12 +35,11 @@ import re
 PROC = "/proc/mchbar"
 
 _OFF_TCL = 0x2E070      # [23:16]
-_OFF_TRCD = 0x2E53C     # [15:8]
+_OFF_TRASTRCD = 0x2E004 # [15:10] tRAS, [24:19] tRCD — оба 6-бит
 _OFF_TRP = 0x2E000      # [7:0]
-_OFF_TRAS = 0x2E004     # [16:10] 6-бит
 _OFF_TFAW = 0x2E008     # [7:0]
 _OFF_TREFI = 0x2E43C    # [15:0]
-_OFF_TRFC1 = 0x2E0A8    # [31:16]
+_OFF_TRFC = 0x2E4C0     # [15:0] — поле tRFC из BIOS + 10нс в тактах
 _MIRROR = 0x10000
 _LINE_RE = re.compile(r"^([0-9a-f]+):\s*([0-9a-f]{8})\s*$")
 
@@ -54,27 +57,26 @@ def parse_dump(text: str) -> dict[int, int]:
 def decode(vals: dict[int, int]) -> dict | None:
     """Первичные тайминги из дампа; None, если окно не похоже на DRAMC."""
     a = vals.get(_OFF_TCL)
-    b = vals.get(_OFF_TRCD)
+    p = vals.get(_OFF_TRASTRCD)
     c = vals.get(_OFF_TRP)
-    d = vals.get(_OFF_TRAS)
-    if a is None or b is None or c is None or d is None:
+    if a is None or p is None or c is None:
         return None
     t_cl = (a >> 16) & 0xFF
-    t_rcd = (b >> 8) & 0xFF
+    t_ras = (p >> 10) & 0x3F
+    t_rcd = (p >> 19) & 0x3F
     t_rp = c & 0xFF
-    t_ras = (d >> 10) & 0x3F
     if not (5 <= t_cl <= 40 and 5 <= t_rcd <= 40 and 5 <= t_rp <= 40):
         return None
     if not (t_cl <= t_ras <= 63):
         return None
     out = {"tCL": t_cl, "tRCD": t_rcd, "tRP": t_rp, "tRAS": t_ras,
-           "source": "0xfeda0000 (LGA1700), карта BIOS-diff 2 раунда"}
+           "source": "0xfeda0000 (LGA1700), карта BIOS-diff 3 раунда"}
     f = vals.get(_OFF_TFAW)
     if f is not None and 4 <= (f & 0xFF) <= 64:
         out["tFAW"] = f & 0xFF
-    r = vals.get(_OFF_TRFC1)
-    if r is not None and 100 <= (r >> 16) <= 4000:
-        out["tRFC"] = (r >> 16) & 0xFFFF
+    r = vals.get(_OFF_TRFC)
+    if r is not None and 100 <= (r & 0xFFFF) <= 4000:
+        out["tRFC"] = r & 0xFFFF
     t = vals.get(_OFF_TREFI)
     if t is not None and (t & 0xFFFF) >= 1000:
         out["tREFI"] = t & 0xFFFF

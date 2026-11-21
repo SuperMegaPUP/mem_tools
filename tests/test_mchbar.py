@@ -24,37 +24,37 @@ def check(name, got, want):
 
 
 DUMP = """2e070: 0e100020
-2e53c: 12131211
 2e000: 16418016
 2e004: 0090982a
 2e008: 18049412
 2e43c: 0800fffe
-2e0a8: 03240040
+2e4c0: 00000210
 мусорная строка
 2e001: не-шестнадцатеричное
 """
 
 vals = mchbar.parse_dump(DUMP)
-check("parse_dump, мусорные строки отброшены", len(vals), 7)
+check("parse_dump, мусорные строки отброшены", len(vals), 6)
 check("parse_dump, значение 0x2e004", vals[0x2E004], 0x0090982A)
 
 d = mchbar.decode(vals)
 check("tCL (якорь 16)", d["tCL"], 16)
-check("tRCD (якорь 18)", d["tRCD"], 18)
+check("tRCD (якорь 18, 6-бит [24:19])", d["tRCD"], 18)
 check("tRP (якорь 22)", d["tRP"], 22)
-check("tRAS (якорь 38, 6-бит)", d["tRAS"], 38)
+check("tRAS (якорь 38, 6-бит [15:10])", d["tRAS"], 38)
 check("tFAW (якорь 18)", d["tFAW"], 18)
-check("tRFC1 (804 tCK @3200 = поле BIOS 512 нс)", d["tRFC"], 804)
+check("tRFC (поле BIOS 512 + 10нс = 528 @3200)", d["tRFC"], 528)
 check("tREFI (якорь 65534)", d["tREFI"], 65534)
 
 # негативные проверки
 check("пустой дамп → None", mchbar.decode({}), None)
 check("FF-окно → None", mchbar.decode(
-    {0x2E070: 0xFFFFFFFF, 0x2E53C: 0xFFFFFFFF,
-     0x2E000: 0xFFFFFFFF, 0x2E004: 0xFFFFFFFF}), None)
+    {0x2E070: 0xFFFFFFFF, 0x2E004: 0xFFFFFFFF,
+     0x2E000: 0xFFFFFFFF}), None)
 check("tRAS < tCL → None", mchbar.decode(
-    {0x2E070: 0x0E1E0020, 0x2E53C: 0x12131211,   # tCL=30
-     0x2E000: 0x16418016, 0x2E004: 0x0090502A}), None)  # tRAS=20
+    {0x2E070: 0x0E1E0020,                    # tCL=30
+     0x2E000: 0x16418016,
+     0x2E004: 0x0090502A}), None)            # tRAS=20
 _proc_orig = mchbar.PROC
 mchbar.PROC = "/nonexistent-mchbar"
 check("read() без /proc → None", mchbar.read(), None)
