@@ -43,8 +43,19 @@ check("tRCD (якорь 18, 6-бит [24:19])", d["tRCD"], 18)
 check("tRP (якорь 22)", d["tRP"], 22)
 check("tRAS (якорь 38, 6-бит [15:10])", d["tRAS"], 38)
 check("tFAW (якорь 18)", d["tFAW"], 18)
+check("tCWL (byte3 0x2e070, =tCL−2=14)", d["tCWL"], 14)
+check("tRRD_L ([13:9] 0x2e008, якорь 10)", d["tRRD_L"], 10)
 check("tRFC (поле BIOS 512 + 10нс = 528 @3200)", d["tRFC"], 528)
 check("tREFI (якорь 65534)", d["tREFI"], 65534)
+
+# r9: ОДИНОЧНАЯ смена tRRD_L 10→9 @4133 (0x2e008 ...9410→...9210 в 4
+# зеркалах) — чистейший якорь 5-битного поля [13:9], поверх байта 1
+d9 = mchbar.decode(mchbar.parse_dump(
+    "2e070: 10120020\n2e000: 16418016\n"
+    "2e004: 00b0a82c\n2e008: 18049210\n"))
+check("r9 tRRD_L (якорь 9)", d9["tRRD_L"], 9)
+check("r9 tCWL (=tCL−2=16)", d9["tCWL"], 16)
+check("r9 tFAW (16, не поехал)", d9["tFAW"], 16)
 
 # негативные проверки
 check("пустой дамп → None", mchbar.decode({}), None)

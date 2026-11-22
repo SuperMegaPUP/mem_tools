@@ -12,10 +12,16 @@ tFAW18 tRFC512 @3200; R3 то же + tRFC704 @3200; см. docs §6.6).
 Блок таймингов — 0x2e000 (зеркала 0x2f000/0x3e000/0x3f000, шаг
 +0x10000):
   0x2e070 [23:16]  — tCL;
+  0x2e070 [31:24]  — tCWL (авто-правило BIOS: tCL−2; рядом
+                     14/15/16/16 на 3200/3600/4000/4133);
   0x2e004 [15:10]  — tRAS (6-бит);
   0x2e004 [24:19]  — tRCD (6-бит, тот же регистр!);
   0x2e000 [7:0]    — tRP;
   0x2e008 [7:0]    — tFAW;
+  0x2e008 [13:9]   — tRRD_L (5-бит, пакуется поверх границы байта —
+                     побайтовый скан его не видит! заякорен
+                     одиночной сменой tRRD_L 10→9 @4133:
+                     0x9410→0x9210 во всех 4 зеркалах);
   0x2e43c [15:0]   — tREFI (raw; 65535 = auto-sentinel, в нс не
                      переводить);
   0x2e43c [31:16]  — поле tRFC из BIOS × 4 (2016/2048/2816 =
@@ -70,10 +76,16 @@ def decode(vals: dict[int, int]) -> dict | None:
     if not (t_cl <= t_ras <= 63):
         return None
     out = {"tCL": t_cl, "tRCD": t_rcd, "tRP": t_rp, "tRAS": t_ras,
-           "source": "0xfeda0000 (LGA1700), карта BIOS-diff 3 раунда"}
+           "source": "0xfeda0000 (LGA1700), карта BIOS-diff 6 раундов"}
+    t_cwl = (a >> 24) & 0xFF
+    if 4 <= t_cwl <= 32:
+        out["tCWL"] = t_cwl
     f = vals.get(_OFF_TFAW)
     if f is not None and 4 <= (f & 0xFF) <= 64:
         out["tFAW"] = f & 0xFF
+        t_rrd_l = (f >> 9) & 0x1F
+        if 2 <= t_rrd_l <= 31:
+            out["tRRD_L"] = t_rrd_l
     r = vals.get(_OFF_TRFC)
     if r is not None and 100 <= (r & 0xFFFF) <= 4000:
         out["tRFC"] = r & 0xFFFF

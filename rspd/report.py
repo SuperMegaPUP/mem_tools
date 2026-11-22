@@ -195,6 +195,7 @@ def render_live(info, as_json=False):
                 _line("", rc_part)
             sub = []
             for key, lbl in (("tWR", "tWR"), ("tFAW", "tFAW"), ("tCWL", "tCWL"),
+                             ("tRRD_L", "tRRD_L"),
                              ("tRRD_tWTR_tRTP", "tRRD/tWTR/tRTP"),
                              ("tMOD", "tMOD")):
                 if d.get(key):
