@@ -6,7 +6,7 @@
 пространно 256 КБ. /dev/mem закрыт IO_STRICT_DEVMEM, поэтому снимок
 снимается read-only модулем tools/mchbar и читается из /proc/mchbar.
 
-Карта привязана ТРЕМЯ BIOS-diff раундами с перекрёстной фильтрацией
+Карта привязана восемью BIOS-diff раундами с перекрёстной фильтрацией
 (Gigabyte B760M: R1 17-20-20-40 tFAW16 tRFC504 @3600; R2 16-18-22-38
 tFAW18 tRFC512 @3200; R3 то же + tRFC704 @3200; см. docs §6.6).
 Блок таймингов — 0x2e000 (зеркала 0x2f000/0x3e000/0x3f000, шаг
@@ -22,6 +22,11 @@ tFAW18 tRFC512 @3200; R3 то же + tRFC704 @3200; см. docs §6.6).
                      побайтовый скан его не видит! заякорен
                      одиночной сменой tRRD_L 10→9 @4133:
                      0x9410→0x9210 во всех 4 зеркалах);
+  0x2e008 [18:15]  — tRRD_S (4-бит, соседка tRRD_L через бит-14=0;
+                     заякорена сменой 6→регистр 6 при стабильных 9 во
+                     всех auto-раундах. Квирк: в AUTO BIOS показывает
+                     10, а в регистре 9 — ручное значение пишется 1:1,
+                     авто-путь дерейтит −1);
   0x2e43c [15:0]   — tREFI (raw; 65535 = auto-sentinel, в нс не
                      переводить);
   0x2e43c [31:16]  — поле tRFC из BIOS × 4 (2016/2048/2816 =
@@ -76,7 +81,7 @@ def decode(vals: dict[int, int]) -> dict | None:
     if not (t_cl <= t_ras <= 63):
         return None
     out = {"tCL": t_cl, "tRCD": t_rcd, "tRP": t_rp, "tRAS": t_ras,
-           "source": "0xfeda0000 (LGA1700), карта BIOS-diff 6 раундов"}
+           "source": "0xfeda0000 (LGA1700), карта BIOS-diff 8 раундов"}
     t_cwl = (a >> 24) & 0xFF
     if 4 <= t_cwl <= 32:
         out["tCWL"] = t_cwl
@@ -86,6 +91,9 @@ def decode(vals: dict[int, int]) -> dict | None:
         t_rrd_l = (f >> 9) & 0x1F
         if 2 <= t_rrd_l <= 31:
             out["tRRD_L"] = t_rrd_l
+        t_rrd_s = (f >> 15) & 0xF
+        if 2 <= t_rrd_s <= 15:
+            out["tRRD_S"] = t_rrd_s
     r = vals.get(_OFF_TRFC)
     if r is not None and 100 <= (r & 0xFFFF) <= 4000:
         out["tRFC"] = r & 0xFFFF

@@ -45,6 +45,7 @@ check("tRAS (якорь 38, 6-бит [15:10])", d["tRAS"], 38)
 check("tFAW (якорь 18)", d["tFAW"], 18)
 check("tCWL (byte3 0x2e070, =tCL−2=14)", d["tCWL"], 14)
 check("tRRD_L ([13:9] 0x2e008, якорь 10)", d["tRRD_L"], 10)
+check("tRRD_S ([18:15], авто-квирк: рег 9 при показе 10)", d["tRRD_S"], 9)
 check("tRFC (поле BIOS 512 + 10нс = 528 @3200)", d["tRFC"], 528)
 check("tREFI (якорь 65534)", d["tREFI"], 65534)
 
@@ -56,6 +57,14 @@ d9 = mchbar.decode(mchbar.parse_dump(
 check("r9 tRRD_L (якорь 9)", d9["tRRD_L"], 9)
 check("r9 tCWL (=tCL−2=16)", d9["tCWL"], 16)
 check("r9 tFAW (16, не поехал)", d9["tFAW"], 16)
+
+# r10: tRRD_S=6 tRRD_L=8 @4133 (0x2e008 18049210→18031010) — ручной
+# путь пишется 1:1: оба поля ровно как выставил
+d10 = mchbar.decode(mchbar.parse_dump(
+    "2e070: 10120020\n2e000: 16418016\n"
+    "2e004: 00b0a82c\n2e008: 18031010\n"))
+check("r10 tRRD_S (ручная 6, якорь)", d10["tRRD_S"], 6)
+check("r10 tRRD_L (ручная 8, якорь)", d10["tRRD_L"], 8)
 
 # негативные проверки
 check("пустой дамп → None", mchbar.decode({}), None)
